@@ -94,11 +94,11 @@ The regex and for extracting the fields is the following:
 	my $page_type = int $3 ;
 ```
 
-Note also that the last element is the page type. There are 3 types:
-  * 1 for Articles
-  * 2 for Categories
-  * 3 for Redirect pages
-  * 4 for Disambiguation pages
+Note also that the last element is the page type. There are 4 types:
+  - 1 for Articles
+  - 2 for Categories
+  - 3 for Redirect pages
+  - 4 for Disambiguation pages
 
 All the rest of CSV files refer to the pages using the identifier (first
 field in the fiels)
@@ -234,9 +234,8 @@ $ path_to_ukb/ukb_wsd -K wikigraph_bothdirs.bin -D dict.txt ...
 # Licenses #
 
 Copyright (C) 2017 Aitor Soroa, IXA group, Universty of the Basque Country.
-The UKB Wikipedia Extraction kit comes with ABSOLUTELY NO WARRANTY; for
-details see LICENSE.txt. This is free software, and you are welcome to
-redistribute it.
+wikipedia2ukb comes with ABSOLUTELY NO WARRANTY; for details see
+LICENSE.txt. This is free software, and you are welcome to redistribute it.
 
 The UKB Wikipedia Extraction Kit is derived from Wikipedia Miner Toolkit,
 version 1.0, which is copyrighted in 2008 by David Milne, University Of
