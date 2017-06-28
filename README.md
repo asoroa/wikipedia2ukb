@@ -95,10 +95,10 @@ The regex and for extracting the fields is the following:
 ```
 
 Note also that the last element is the page type. There are 4 types:
-  - 1 for Articles
-  - 2 for Categories
-  - 3 for Redirect pages
-  - 4 for Disambiguation pages
+  1. for Articles
+  2. for Categories
+  3. for Redirect pages
+  4. for Disambiguation pages
 
 All the rest of CSV files refer to the pages using the identifier (first
 field in the fiels)
@@ -234,12 +234,12 @@ $ path_to_ukb/ukb_wsd -K wikigraph_bothdirs.bin -D dict.txt ...
 # Licenses #
 
 Copyright (C) 2017 Aitor Soroa, IXA group, Universty of the Basque Country.
-wikipedia2ukb comes with ABSOLUTELY NO WARRANTY; for details see
+`wikipedia2ukb` comes with ABSOLUTELY NO WARRANTY; for details see
 LICENSE.txt. This is free software, and you are welcome to redistribute it.
 
-The UKB Wikipedia Extraction Kit is derived from Wikipedia Miner Toolkit,
-version 1.0, which is copyrighted in 2008 by David Milne, University Of
-Waikato, and distributed under the terms of the GNU General Public License.
+The `wikipedia2ukb` is derived from Wikipedia Miner Toolkit, version 1.0,
+which is copyrighted in 2008 by David Milne, University Of Waikato, and
+distributed under the terms of the GNU General Public License.
 
 The Tree::XPathEngine module is copyrighted in 2006 by Michel Rodriguez, and
 distributed under the same terms as Perl itself.
