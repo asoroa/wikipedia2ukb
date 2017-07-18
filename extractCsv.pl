@@ -56,6 +56,7 @@ $language{"en"}->{disambig_templates} = ["disambiguation", "disambig", "geodis",
 										 "mathdab", "mountianindex", "numberdis", "roaddis", "schooldis", "shipindex", "SIA"];
 $language{"en"}->{disambig_categories} = ["disambiguation"] ;
 $language{"en"}->{root_category} = "Contents" ; # for enwiki
+$language{"en"}->{see_also} = "see also";
 $language{"en"}->{redir_string} = ["#redirect"];
 #my $root_category = "Main page" ; # for simple wiki
 
@@ -64,6 +65,7 @@ $language{"en"}->{redir_string} = ["#redirect"];
 $language{"es"}->{disambig_templates} = ["desambiguación", "des"];
 $language{"es"}->{disambig_categories} = ["wikipedia:desambiguación"] ;
 $language{"es"}->{root_category} = "Artículos" ;
+$language{"en"}->{see_also} = "véase también";
 $language{"es"}->{redir_string} = ["#redirect", "#redirección", "#redireccion" ];
 
 # basque
@@ -71,6 +73,7 @@ $language{"es"}->{redir_string} = ["#redirect", "#redirección", "#redireccion" 
 $language{"eu"}->{redir_string} = ["#redirect", "#birzuzendu" ];
 $language{"eu"}->{disambig_templates} = ["argipen", "disambig"] ;
 $language{"eu"}->{disambig_categories} = ["wikipedia:argipen"] ; # ??
+$language{"en"}->{see_also} = "ikus, gainera";
 $language{"eu"}->{root_category} = "Edukiak" ;
 
 # language setting =========================================================================================================
@@ -88,7 +91,7 @@ open (LOG, "> $out_dir/log.txt") or die "data dir '$out_dir' is not writable. \n
 binmode(LOG, ':utf8');
 
 my ($category_str, %namespaces) = &get_namespaces($DUMP_FILE) ;
-my ($root_category, $dt_test, $dc_test, $redirect_test) = &wiki_language($xlang, $category_str);
+my ($root_category, $dt_test, $dc_test, $redirect_test, $see_also_str) = &wiki_language($xlang, $category_str);
 
 # get progress ===========================================================================================================
 
@@ -352,8 +355,8 @@ sub extractRedirectSummaryFromDump {
 		next unless $link_markup;
 
 		#die $page->revision->text unless defined $link_markup;
-		my $target_lang ="";
-		($link_markup, $target_lang) = &markup_remove_target_lang($link_markup, $target_lang);
+		my $target_lang;
+		($link_markup, $target_lang) = &markup_remove_target_lang($link_markup);
 		my ($target_namespace, $target_ns_key);
 		($link_markup, $target_namespace, $target_ns_key) = &markup_namespace($link_markup);
 
@@ -444,8 +447,8 @@ sub extractCoreSummariesFromDump {
 		&process_disamb_page($stripped_text, $id, $title, $disambig_fh) if &page_is_disamb($text);
 
 		foreach my $link_markup (&xtract_link_markups($stripped_text)) {
-			my $target_lang ="";
-			($link_markup, $target_lang) = &markup_remove_target_lang($link_markup, $target_lang);
+			my $target_lang;
+			($link_markup, $target_lang) = &markup_remove_target_lang($link_markup);
 			my ($target_namespace, $target_ns_key);
 			($link_markup, $target_namespace, $target_ns_key) = &markup_namespace($link_markup);
 			my ($target_title, $anchor_text) = &parse_link_markup($link_markup);
@@ -587,7 +590,7 @@ sub process_disamb_page {
 
 	foreach my $line (split(/\n/, $stripped_text)) {
 
-		if ($line =~ m/\={2,}\s*See Also/i) {
+		if ($line =~ m/\={2,}\s*$see_also_str/i) {
 			# down to "see also" links, which we want to ignore
 			last ;
 		}
@@ -600,8 +603,8 @@ sub process_disamb_page {
 
 		next unless $pos_of_title < 0; # only interested if title of page isnt found before the link
 
-		my $target_lang ="";
-		($link_markup, $target_lang) = &markup_remove_target_lang($link_markup, $target_lang);
+		my $target_lang;
+		($link_markup, $target_lang) = &markup_remove_target_lang($link_markup);
 
 		last if $target_lang ne ""; # down to language links, which we want to ignore
 		my ($target_namespace, $target_ns_key);
@@ -694,8 +697,8 @@ sub extractInfoboxRelationsFromDump {
 		next unless ($namespace_key==0 or $namespace_key==14);
 
 		foreach my $link_markup (&xtract_infobox_markups($text)) {
-			my $target_lang ="";
-			($link_markup, $target_lang) = &markup_remove_target_lang($link_markup, $target_lang);
+			my $target_lang;
+			($link_markup, $target_lang) = &markup_remove_target_lang($link_markup);
 			next unless $target_lang eq ""; # no inter-lingual links
 			my ($target_namespace, $target_ns_key);
 			($link_markup, $target_namespace, $target_ns_key) = &markup_namespace($link_markup);
@@ -718,8 +721,8 @@ sub extractInfoboxRelationsFromDump {
 
 sub markup_remove_target_lang {
 
-	my ($link_markup, $target_lang) = @_;
-
+	my ($link_markup) = @_;
+	my $target_lang = "";
 	if ($link_markup =~ m/^([a-z]{1}.+?):(.+)/) {
 		if (not defined $namespaces{lc($1)}) {
 			$target_lang = &clean_text($1) ;
@@ -789,7 +792,6 @@ sub push_link_markups {
 	# if nested, do nothing
 	# else
 	#   push link_markup
-
 	while ($i < $m) {
 		while ($i < $m and $T[$i] ne "[[") {
 			$i++;
@@ -797,13 +799,23 @@ sub push_link_markups {
 		last unless ($i < $m) ;
 		# $T[$i] == "[["
 		my $markup;
-		$j = $i + 1;
-		while ($j < $m) {
+		my $nested = 0;
+		$j = $i;
+		while (++$j < $m) {
 			last if ($T[$j] eq "]]");
+			if ($T[$j] eq "[[") {
+				$nested = 1;
+				my $l = 1;
+				while (++$j < $m) {
+					last if $T[$j] eq "]]" and not $l;
+					$l-- if ($T[$j] eq "]]");
+					$l++ if ($T[$j] eq "[[");
+				}
+				last;
+			}
 			$markup .= $T[$j];
-			$j++;
 		}
-		push @{ $markups }, $markup if $markup;
+		push @{ $markups }, $markup if $markup and not $nested ;
 		$i = $j + 1;
 	}
 }
@@ -1237,7 +1249,9 @@ sub wiki_language {
 	} else {
 		$redirect_test = "(".join("|", @{ $language{$xlang}->{redir_string} }).")" ;
 	}
-	return ($root_category, $dt_test, $dc_test, $redirect_test);
+	my $see_also = $language{$xlang}->{see_also};
+	$see_also = "See also" unless defined $see_also;
+	return ($root_category, $dt_test, $dc_test, $redirect_test, $see_also);
 }
 
 
