@@ -354,22 +354,8 @@ sub extractRedirectSummaryFromDump {
 		#die $page->revision->text unless defined $link_markup;
 		my $target_lang ="";
 		($link_markup, $target_lang) = &check_valid_namespace($link_markup, $target_lang);
-
-		my $target_namespace = "" ;
-		my $target_ns_key = 0 ;
-
-		if ($link_markup =~ m/^(.*?):+(.+)/) {
-			$link_markup = $2 ;
-			if ($1) {
-				$target_namespace = $1;
-				$target_ns_key = $namespaces{lc($target_namespace)};
-				if (not defined $target_ns_key) {
-					# invalid namespace, so reconstruct link_markup
-					$link_markup = "${target_namespace}:${link_markup}";
-					$target_ns_key = 0;
-				}
-			}
-		}
+		my ($target_namespace, $target_ns_key);
+		($link_markup, $target_namespace, $target_ns_key) = &markup_namespace($link_markup);
 
 		next unless $target_ns_key == 0 or $target_ns_key == 14;
 
@@ -463,7 +449,8 @@ sub extractCoreSummariesFromDump {
 		foreach my $link_markup (&xtract_link_markups($stripped_text)) {
 			my $target_lang ="";
 			($link_markup, $target_lang) = &check_valid_namespace($link_markup, $target_lang);
-			my ($link_markup, $target_namespace, $target_ns_key) = &markup_namespace($link_markup);
+			my ($target_namespace, $target_ns_key);
+			($link_markup, $target_namespace, $target_ns_key) = &markup_namespace($link_markup);
 			my ($target_title, $anchor_text) = &parse_link_markup($link_markup);
 			#print "l=$target_lang, ns=$target_namespace($target_ns_key), n=$target_title, a=$anchor_text\n" ;
 			next unless $anchor_text;
@@ -713,7 +700,8 @@ sub extractInfoboxRelationsFromDump {
 			my $target_lang ="";
 			($link_markup, $target_lang) = &check_valid_namespace($link_markup, $target_lang);
 			next unless $target_lang eq ""; # no inter-lingual links
-			my ($link_markup, $target_namespace, $target_ns_key) = &markup_namespace($link_markup);
+			my ($target_namespace, $target_ns_key);
+			($link_markup, $target_namespace, $target_ns_key) = &markup_namespace($link_markup);
 			next unless $target_ns_key == 0 or $target_ns_key == 14;
 
 			my ($target_title, $anchor_text) = &parse_link_markup($link_markup);
