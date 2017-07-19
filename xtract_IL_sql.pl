@@ -44,9 +44,8 @@ while (my ($id_from, $v) = each %Titles) {
 	my $tit_from = $v->{title_from};
 	next unless $tit_from;
 	my $tit_to = $v->{title_to};
-	if ( $tit_to =~ /^Category:/ ) {
+	if ( $tit_to =~ s/^Category://i ) {
 		next unless $include_cat;
-		$tit_to = $';
 	}
 	print $id_from."\t".$tit_from."\t".$tit_to."\n";
 }
