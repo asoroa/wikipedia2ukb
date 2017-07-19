@@ -162,7 +162,7 @@ sub _match {
 	return 0 unless defined $awkey;
 	my $awN = @{ $awkey };
 	return 1 if $awN == 1;
-	my $maxidx = scalar @{$ words } - $i;
+	my $maxidx = scalar @{$ words } - $i - 1;
 	$maxidx =  $awN - 1  if $awN - 1 < $maxidx;
 	for(my $length = $maxidx; $length > 0; $length--) {
 		next unless defined $awkey->[$length];
