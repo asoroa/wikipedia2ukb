@@ -100,10 +100,9 @@ my $PROGRESS = &load_progress();
 $PROGRESS = 0 if defined $opts{'f'};
 # page summary ===========================================================================================================
 
-my @ids = () ;					#ordered array of page ids
-my %pages_ns0 = () ; #case normalized title -> id. 'Page, Redirect, Disambiguation' articles.
-my %pages_ns14 = () ; #case normalized title -> id. 'Category' articles.
-
+my @ids = (); # ordered array of page ids
+my %pages_ns0 = (); # case normalized title -> id. 'Page, Redirect, Disambiguation' articles.
+my %pages_ns14 = (); # case normalized title -> id. 'Category' articles.
 
 if ($PROGRESS > 3 ) {
 	print "Nothing to do. Check your progress file: $PROGRESSFILE\n";
@@ -115,26 +114,9 @@ extractRedirectSummary();
 extractCoreSummaries();
 extractInfoboxRelations();
 
-# if ($PROGRESS < 8) {
-#	if ($PROGRESS < 4) {
-#		extractPageSummary();
-#		extractRedirectSummary();
-#		extractCoreSummaries();
-#		extractInfoboxRelations();
-#	}
-	# exit 0;
-	# extractAnchorSummary() ;
-	# extractGenerality() ;
-	# extractLinkCountSummary() ;
-	# extractLinksOutSummary() ;
-	# extractLinksInSummary() ;
-#}
-
-# if ($contentFlag) {
-#   extractContent() ;
-# }
-
 close (LOG);
+
+# =================================== page summary ==================================================================
 
 sub extractPageSummary {
 	if ($PROGRESS >= 1) {
@@ -289,7 +271,7 @@ sub extractPageSummaryFromDump {
 	print "\n" ;
 }
 
-# redirect summary ===========================================================================================================
+# =================================== redirect summary ==================================================================
 
 my %redirects = () ;			#from_id -> to_id
 
@@ -388,7 +370,7 @@ sub extractRedirectSummaryFromDump {
 	close REDIRECT ;
 }
 
-# other core tables =============================================================================================================
+# =================================== main core tables ==================================================================
 
 sub extractCoreSummaries {
 	if ($PROGRESS < 3) {
@@ -717,30 +699,7 @@ sub extractInfoboxRelationsFromDump {
 
 }
 
-# extract language from markup
-
-sub markup_remove_target_lang {
-
-	my ($link_markup) = @_;
-	my $target_lang = "";
-	if ($link_markup =~ m/^([a-z]{1}.+?):(.+)/) {
-		if (not defined $namespaces{lc($1)}) {
-			$target_lang = &clean_text($1) ;
-			$link_markup = $2 ;
-		}
-	}
-	return ($link_markup, $target_lang);
-}
-
 # whether a page is a disambiguation page
-
-sub page_is_redirect {
-
-	my $page = shift;
-
-	my $red_str = &xtract_redirect($page);
-	return defined $red_str;
-}
 
 sub page_is_disamb {
 
@@ -757,81 +716,17 @@ sub page_is_disamb {
 	return 0;
 }
 
-# text cleaning =================================================================================================================
+# whether a page is a redirect page
 
-sub xtract_redirect {
+sub page_is_redirect {
 
 	my $page = shift;
 
-	my $redir_str = &xtract_redirect_v8($page);
-	return $redir_str if defined $redir_str;
-	return undef unless $page->revision->text =~ m/^\s*$redirect_test\s*:?\s*\[\[:*(.*?)\]\]/i;
-	return (split(/\|/, $1))[0];
+	my $red_str = &xtract_redirect($page);
+	return defined $red_str;
 }
 
-sub xtract_redirect_v8 {
-	my $page = shift;
-
-	return undef unless defined $page->{tree};
-	my $redir_elem = $page->{tree}->get_elements('redirect');
-	return undef unless $redir_elem;
-	return $redir_elem->attribute('title');
-}
-
-
-sub push_link_markups {
-
-	my ($markups, $text) = @_;
-
-	my @T = split(/(\[\[|\]\])/, $text);
-
-	my ($i, $j, $m) = (0,0, scalar(@T));
-
-	# find first "[[" element (i)
-	# find "]]" element and notice if nested anchors (j, nested)
-	# if nested, do nothing
-	# else
-	#   push link_markup
-	while ($i < $m) {
-		while ($i < $m and $T[$i] ne "[[") {
-			$i++;
-		}
-		last unless ($i < $m) ;
-		# $T[$i] == "[["
-		my $markup;
-		my $nested = 0;
-		$j = $i;
-		while (++$j < $m) {
-			last if ($T[$j] eq "]]");
-			if ($T[$j] eq "[[") {
-				$nested = 1;
-				my $l = 1;
-				while (++$j < $m) {
-					last if $T[$j] eq "]]" and not $l;
-					$l-- if ($T[$j] eq "]]");
-					$l++ if ($T[$j] eq "[[");
-				}
-				last;
-			}
-			$markup .= $T[$j];
-		}
-		push @{ $markups }, $markup if $markup and not $nested ;
-		$i = $j + 1;
-	}
-}
-
-#
-# Extract link markups from page content
-#
-
-sub xtract_link_markups {
-
-	my ($text) = @_;
-
-	my @markups;
-	&push_link_markups(\@markups, $text);
-	return @markups;
-}
+# ============================ infobox =====================================================================
 
 sub xtract_infobox_markups {
 
@@ -896,38 +791,38 @@ sub markups_inside_infobox {
 	return ($i, $links);
 }
 
-sub parse_text {
+# ============================ namespaces =====================================================================
 
-	my $str = shift;
+# extract namespace from XML dump file
+sub get_namespaces {
 
-	my $splitpattern =
-	  '(\{\{+)'.				# opening braces
-		'|(\}\}+)'.				# closing braces
-		  '|(\[\[|\]\])'		# link
-			;
+	my ($dump_file) = @_;
 
-	$str =~ s/<!--.*?-->//gs; # remove XML comments
-	$str =~ s/<noinclude[^<>]*>.*?<\/noinclude>//sgo; # noinclude, comments: usually ignore
-	$str =~ s/<\/?includeonly>//sgo; # noinclude, comments: usually ignore
-	$str =~ s/<nowiki[^<>]*>.*?<\/nowiki>//sgo; # nowiki
-	$str =~ s/<math[^<>]*>.*?<\/sath>//sgo;
-	$str =~ s/<imagemap[^<>]*>.*?<\/imagemap>//sgo;
-	$str =~ s/<gallery[^<>]*>.*?<\/gallery>//sgo;
-	$str =~ s/<ref[^<>]*\/>//sgo;
-	$str =~ s/<ref[^<>]*>.*?<\/ref>//sgo;
-	$str =~ s/<source[^<>]*>.*?<\/source>//sgo;
-	$str =~ s/<pre[^<>]*>.*?<\/pre>//sgo;
+	my $category_str;
+	my %namespaces = () ;
+	my $dump_fh = &open_maybe_bz2($dump_file);
+	while (defined (my $line = <$dump_fh>)) {
 
-	my @T;
-	foreach my $c (split (/$splitpattern/i, $str)) {
-		next if $c =~/^\s*$/o;
-		push @T, $c;
+		$line =~ s/\s//g ;		#clean whitespace
+
+		if ($line =~ m/<\/namespaces>/i) {
+			last ;
+		}
+
+		if ($line =~ m/<namespacekey=\"([^\"]+)\"[^>]*>(.*)<\/namespace>/i) {
+			$namespaces{lc($2)} = $1 ;
+			$category_str = lc($2) if $1 == 14;
+		}
+
+		if ($line =~ m/<namespacekey=\"([^\"]+)\"[^>]*\/>/i) {
+			$namespaces{""} = $1 ;
+		}
 	}
-	return @T;
+	close $dump_fh ;
+	return ($category_str, %namespaces)
 }
 
-# if title contains a namespace "Category:Sports" remove the namespace and return the namespace key number
-
+# Get namespace from title
 sub title_namespace {
 	my $title = shift;
 	my $key = 0;
@@ -944,9 +839,7 @@ sub title_namespace {
 	return ($title, $ns_maybe, $key);
 }
 
-#
 # Get namespace from link markup
-#
 sub markup_namespace {
 	my $link_markup = shift;
 	my $target_namespace = "" ;
@@ -966,6 +859,96 @@ sub markup_namespace {
 	return ($link_markup, $target_namespace, $target_ns_key);
 }
 
+# ============================ redirect =====================================================================
+
+sub xtract_redirect {
+
+	my $page = shift;
+
+	my $redir_str = &xtract_redirect_v8($page);
+	return $redir_str if defined $redir_str;
+	return undef unless $page->revision->text =~ m/^\s*$redirect_test\s*:?\s*\[\[:*(.*?)\]\]/i;
+	return (split(/\|/, $1))[0];
+}
+
+sub xtract_redirect_v8 {
+	my $page = shift;
+
+	return undef unless defined $page->{tree};
+	my $redir_elem = $page->{tree}->get_elements('redirect');
+	return undef unless $redir_elem;
+	return $redir_elem->attribute('title');
+}
+
+# ============================ link markups =====================================================================
+
+# extract language from link markup
+sub markup_remove_target_lang {
+
+	my ($link_markup) = @_;
+	my $target_lang = "";
+	if ($link_markup =~ m/^([a-z]{1}.+?):(.+)/) {
+		if (not defined $namespaces{lc($1)}) {
+			$target_lang = &clean_text($1) ;
+			$link_markup = $2 ;
+		}
+	}
+	return ($link_markup, $target_lang);
+}
+
+# push link markups in $text into the $markups array
+sub push_link_markups {
+
+	my ($markups, $text) = @_;
+
+	my @T = split(/(\[\[|\]\])/, $text);
+
+	my ($i, $j, $m) = (0,0, scalar(@T));
+
+	# find first "[[" element (i)
+	# find "]]" element and notice if nested anchors (j, nested)
+	# if nested, do nothing
+	# else
+	#   push link_markup
+	while ($i < $m) {
+		while ($i < $m and $T[$i] ne "[[") {
+			$i++;
+		}
+		last unless ($i < $m) ;
+		# $T[$i] == "[["
+		my $markup;
+		my $nested = 0;
+		$j = $i;
+		while (++$j < $m) {
+			last if ($T[$j] eq "]]");
+			if ($T[$j] eq "[[") {
+				$nested = 1;
+				my $l = 1;
+				while (++$j < $m) {
+					last if $T[$j] eq "]]" and not $l;
+					$l-- if ($T[$j] eq "]]");
+					$l++ if ($T[$j] eq "[[");
+				}
+				last;
+			}
+			$markup .= $T[$j];
+		}
+		push @{ $markups }, $markup if $markup and not $nested ;
+		$i = $j + 1;
+	}
+}
+
+# Extract link markups from page content
+sub xtract_link_markups {
+
+	my ($text) = @_;
+
+	my @markups;
+	&push_link_markups(\@markups, $text);
+	return @markups;
+}
+
+# get (clean) target and anchor text from link markup
 sub parse_link_markup {
 	my $link_markup = shift;
 
@@ -981,25 +964,9 @@ sub parse_link_markup {
 	return ($target_title, $anchor_text);
 }
 
-# makes first letter of every word uppercase
-sub normalize_casing {
-	my $title = shift ;
-	$title =~ s/(\w)(\w*)/\u$1$2/g;
-	return $title;
-}
+# ============================ text cleaning =====================================================================
 
-# cleans the given title so that it will be matched to entries saved in the page table
-sub clean_title {
-	my $title = shift ;
-
-	$title = clean_text($title) ;
-	$title =~ s/_+/ /g;			# replace underscores with spaces
-	$title =~ s/\s+/ /g;		# remove multiple spaces
-	$title =~ s/\#.+//; #remove page-internal part of link (the bit after the #)
-
-	return $title;
-}
-
+# strip (nested) templates and similar structures
 sub strip_templates {
 	my $text = shift ;
 
@@ -1024,28 +991,23 @@ sub strip_templates {
 	return $res ;
 }
 
-sub strip_markups {
-	my $text = shift ;
+# makes first letter of every word uppercase
+sub normalize_casing {
+	my $title = shift ;
+	$title =~ s/(\w)(\w*)/\u$1$2/g;
+	return $title;
+}
 
-	my $res;
-	my @T = split(/(\[\[|\]\])/, $text);
-	my $open = 0;
-	for (my $i=0; $i < scalar(@T); $i++) {
-		if ($T[$i] eq "[[") {
-			$open++;
-			next;
-		}
-		if ($T[$i] eq "]]") {
-			$open--;
-			next;
-		}
-		$res .= $T[$i] unless $open;
-	}
-	# $text =~ s/\{\{((?:[^{}]+|\{(?!\{)|\}(?!\}))*)\}\}//sxg ; #remove all templates that dont have any templates in them
-	# $text =~ s/\{\{((.|\n)*?)\}\}//g ; #repeat to get rid of nested templates
-	# $text =~ s/\{\|((.|\n)+?)\|\}//g ; #remove {|...|} structures
+# cleans the given title so that it will be matched to entries saved in the page table
+sub clean_title {
+	my $title = shift ;
 
-	return $res ;
+	$title = clean_text($title) ;
+	$title =~ s/_+/ /g;			# replace underscores with spaces
+	$title =~ s/\s+/ /g;		# remove multiple spaces
+	$title =~ s/\#.+//; #remove page-internal part of link (the bit after the #)
+
+	return $title;
 }
 
 # cleans the given text so that it can be safely inserted into database
@@ -1063,49 +1025,109 @@ sub clean_text {
 	return $text ;
 }
 
-sub extract_markups_stripped {
+# ============================ misc=================================================================================
 
-	my ($text) = @_;
+# extract root category and regex-es for particular language
+sub wiki_language {
 
-	my @T = split(/(\[\[|\]\])/, $text);
-	my @markups;
+	my ($xlang, $category_str) = @_;
 
-	my ($i, $j, $m) = (0,0, scalar(@T));
+	my $root_category = $language{$xlang}->{root_category};
 
-	# find first "[[" element (i)
-	# find "]]" element and notice if nested anchors (j, nested)
-	# if nested, do nothing
-	# else
-	#   push link_markup
+	# disambig tests =========================================================================================================
 
-	while (1) {
-		while ($i < $m and $T[$i] ne "[[") {
-			$i++;
-		}
-		last unless ($i < $m) ;
-		# $T[$i] == "[["
-		$j = $i + 1;
-		my $open = 0;
-		while ($j < $m) {
-			last if ($T[$j] eq "]]" && not $open);
-			$open-- if $T[$j] eq "]]";
-			$open++ if $T[$j] eq "[[";
-			$j++;
-		}
-		if ($j >= $m) {
-			splice(@T, $i); # j>m while searching for end "]]" -> empty trailing elements
-			last;
-		}
-		if ($j == $i + 2) {
-			# Single anchor. Remove only if uri != target_uri
-			push @markups, $T[$i + 1];
-		}
+	my $dt_test  ;
+	my $dc_test ;
+
+	my @disambig_templates = @{ $language{$xlang}->{disambig_templates} };
+	my @disambig_categories = @{ $language{$xlang}->{disambig_categories} };
+	if (scalar @disambig_templates == 1) {
+		$dt_test = $disambig_templates[0] ;
+	} else {
+		$dt_test = "(".join("|", @disambig_templates).")" ;
 	}
-	return @markups;
+	#$dt_test = "\\{\\{".lc($dt_test).".*?\\}\\}" ;
+	$dt_test = "\\{\\{".lc($dt_test)."\\b" ;
+
+	$dc_test = join("|", @disambig_categories) ;
+	if (scalar @disambig_categories == 1) {
+		$dc_test = $disambig_categories[0] ;
+	} else {
+		$dc_test = "(".join("|", @disambig_categories).")" ;
+	}
+	$dc_test = "\\[\\[$category_str:".lc($dc_test).".*?\\]\\]" ;
+
+	# redirect test =========================================================================================================
+
+	my $redirect_test;
+
+	if (scalar @{ $language{$xlang}->{redir_string} } == 1) {
+		$redirect_test = $language{$xlang}->{redir_string}->[0];
+	} else {
+		$redirect_test = "(".join("|", @{ $language{$xlang}->{redir_string} }).")" ;
+	}
+	my $see_also = $language{$xlang}->{see_also};
+	$see_also = "See also" unless defined $see_also;
+	return ($root_category, $dt_test, $dc_test, $redirect_test, $see_also);
 }
 
+sub usage {
+	my $str = shift;
+	my $exec = basename ($0);
+	print STDERR <<"USG";
+Usage: $exec [-h] [-l lang] [-p] xml_dump_file_or_data_dir
+	-h		  help
+	-l lang	  language
+	-p		  show progress
+	-f		  Force extraction
+USG
+	  print STDERR "\n$str\n" if $str;
+	exit 1;
+}
 
-# displaying progress ============================================================================================================
+sub open_maybe_bz2 {
+
+	  my $fname = shift;
+	  my $fh;
+
+	  $fname .= ".bz2" unless -e $fname;
+	  if ($fname =~ /\.bz2$/) {
+		  open($fh, "-|:encoding(UTF-8)", "bzcat $fname") or die "bzcat $fname: $!\n";
+	  } else {
+		  open($fh, "<:encoding(UTF-8)", "$fname") or die "$fname: $!\n";
+	  }
+	  return $fh;
+  }
+
+sub file_exists {
+
+	my $fname = shift;
+
+	return 1 if -e $fname;
+	return 0 if $fname =~ /\.bz2$/;
+	$fname .= ".bz2";
+	return -e $fname;
+}
+
+sub get_dump_fname {
+
+	my $data_dir = shift;
+	my $dump_file;
+	my @files = <$data_dir/*>;
+	foreach my $file (@files) {
+		if ($file =~ m/pages-articles.xml/i) {
+			if (defined $dump_file) {
+				die "the data directory '$data_dir' contains multiple dump files\n" ;
+			} else {
+				$dump_file = $file ;
+			}
+		}
+	}
+	return undef unless $dump_file;
+	return "$data_dir/$dump_file";
+}
+
+# ===========================  progress ==============================================================================
 
 my $msg ;
 my $last_report_time ;
@@ -1166,126 +1188,7 @@ sub print_progress {
 	print $msg ;
 }
 
-  sub open_maybe_bz2 {
-
-	  my $fname = shift;
-	  my $fh;
-
-	  $fname .= ".bz2" unless -e $fname;
-	  if ($fname =~ /\.bz2$/) {
-		  open($fh, "-|:encoding(UTF-8)", "bzcat $fname") or die "bzcat $fname: $!\n";
-	  } else {
-		  open($fh, "<:encoding(UTF-8)", "$fname") or die "$fname: $!\n";
-	  }
-	  return $fh;
-  }
-
-sub file_exists {
-
-	my $fname = shift;
-
-	return 1 if -e $fname;
-	return 0 if $fname =~ /\.bz2$/;
-	$fname .= ".bz2";
-	return -e $fname;
-}
-
-sub get_dump_fname {
-
-	my $data_dir = shift;
-	my $dump_file;
-	my @files = <$data_dir/*>;
-	foreach my $file (@files) {
-		if ($file =~ m/pages-articles.xml/i) {
-			if (defined $dump_file) {
-				die "the data directory '$data_dir' contains multiple dump files\n" ;
-			} else {
-				$dump_file = $file ;
-			}
-		}
-	}
-	return undef unless $dump_file;
-	return "$data_dir/$dump_file";
-}
-
-
-# extract root category and regex-es for particular language
-
-sub wiki_language {
-
-	my ($xlang, $category_str) = @_;
-
-	my $root_category = $language{$xlang}->{root_category};
-
-	# disambig tests =========================================================================================================
-
-	my $dt_test  ;
-	my $dc_test ;
-
-	my @disambig_templates = @{ $language{$xlang}->{disambig_templates} };
-	my @disambig_categories = @{ $language{$xlang}->{disambig_categories} };
-	if (scalar @disambig_templates == 1) {
-		$dt_test = $disambig_templates[0] ;
-	} else {
-		$dt_test = "(".join("|", @disambig_templates).")" ;
-	}
-	#$dt_test = "\\{\\{".lc($dt_test).".*?\\}\\}" ;
-	$dt_test = "\\{\\{".lc($dt_test)."\\b" ;
-
-	$dc_test = join("|", @disambig_categories) ;
-	if (scalar @disambig_categories == 1) {
-		$dc_test = $disambig_categories[0] ;
-	} else {
-		$dc_test = "(".join("|", @disambig_categories).")" ;
-	}
-	$dc_test = "\\[\\[$category_str:".lc($dc_test).".*?\\]\\]" ;
-
-	# redirect test =========================================================================================================
-
-	my $redirect_test;
-
-	if (scalar @{ $language{$xlang}->{redir_string} } == 1) {
-		$redirect_test = $language{$xlang}->{redir_string}->[0];
-	} else {
-		$redirect_test = "(".join("|", @{ $language{$xlang}->{redir_string} }).")" ;
-	}
-	my $see_also = $language{$xlang}->{see_also};
-	$see_also = "See also" unless defined $see_also;
-	return ($root_category, $dt_test, $dc_test, $redirect_test, $see_also);
-}
-
-
-# get namespaces ============================================================================================================
-
-sub get_namespaces {
-
-	my ($dump_file) = @_;
-
-	my $category_str;
-	my %namespaces = () ;
-	my $dump_fh = &open_maybe_bz2($dump_file);
-	while (defined (my $line = <$dump_fh>)) {
-
-		$line =~ s/\s//g ;		#clean whitespace
-
-		if ($line =~ m/<\/namespaces>/i) {
-			last ;
-		}
-
-		if ($line =~ m/<namespacekey=\"([^\"]+)\"[^>]*>(.*)<\/namespace>/i) {
-			$namespaces{lc($2)} = $1 ;
-			$category_str = lc($2) if $1 == 14;
-		}
-
-		if ($line =~ m/<namespacekey=\"([^\"]+)\"[^>]*\/>/i) {
-			$namespaces{""} = $1 ;
-		}
-	}
-	close $dump_fh ;
-	return ($category_str, %namespaces)
-}
-
-sub load_progress {
+  sub load_progress {
 	my $progress = 0 ;
 
 	return 0 unless &file_exists($PROGRESSFILE);
@@ -1304,17 +1207,100 @@ sub save_progress {
 	close PROGRESS ;
 }
 
+# ========================== NOT USED =============================================================================
 
-sub usage {
+# strip (nested) link markups form text. NOTE: not used!
+sub strip_markups {
+	my $text = shift ;
+
+	my $res;
+	my @T = split(/(\[\[|\]\])/, $text);
+	my $open = 0;
+	for (my $i=0; $i < scalar(@T); $i++) {
+		if ($T[$i] eq "[[") {
+			$open++;
+			next;
+		}
+		if ($T[$i] eq "]]") {
+			$open--;
+			next;
+		}
+		$res .= $T[$i] unless $open;
+	}
+	# $text =~ s/\{\{((?:[^{}]+|\{(?!\{)|\}(?!\}))*)\}\}//sxg ; #remove all templates that dont have any templates in them
+	# $text =~ s/\{\{((.|\n)*?)\}\}//g ; #repeat to get rid of nested templates
+	# $text =~ s/\{\|((.|\n)+?)\|\}//g ; #remove {|...|} structures
+
+	return $res ;
+}
+
+sub extract_markups_stripped {
+
+	my ($text) = @_;
+
+	my @T = split(/(\[\[|\]\])/, $text);
+	my @markups;
+
+	my ($i, $j, $m) = (0,0, scalar(@T));
+
+	# find first "[[" element (i)
+	# find "]]" element and notice if nested anchors (j, nested)
+	# if nested, do nothing
+	# else
+	#   push link_markup
+
+	while (1) {
+		while ($i < $m and $T[$i] ne "[[") {
+			$i++;
+		}
+		last unless ($i < $m) ;
+		# $T[$i] == "[["
+		$j = $i + 1;
+		my $open = 0;
+		while ($j < $m) {
+			last if ($T[$j] eq "]]" && not $open);
+			$open-- if $T[$j] eq "]]";
+			$open++ if $T[$j] eq "[[";
+			$j++;
+		}
+		if ($j >= $m) {
+			splice(@T, $i); # j>m while searching for end "]]" -> empty trailing elements
+			last;
+		}
+		if ($j == $i + 2) {
+			# Single anchor. Remove only if uri != target_uri
+			push @markups, $T[$i + 1];
+		}
+	}
+	return @markups;
+}
+
+sub parse_text {
+
 	my $str = shift;
-	my $exec = basename ($0);
-	print STDERR <<"USG";
-Usage: $exec [-h] [-l lang] [-p] xml_dump_file_or_data_dir
-	-h		  help
-	-l lang	  language
-	-p		  show progress
-	-f		  Force extraction
-USG
-	  print STDERR "\n$str\n" if $str;
-	exit 1;
+
+	my $splitpattern =
+	  '(\{\{+)'.				# opening braces
+		'|(\}\}+)'.				# closing braces
+		  '|(\[\[|\]\])'		# link
+			;
+
+	$str =~ s/<!--.*?-->//gs; # remove XML comments
+	$str =~ s/<noinclude[^<>]*>.*?<\/noinclude>//sgo; # noinclude, comments: usually ignore
+	$str =~ s/<\/?includeonly>//sgo; # noinclude, comments: usually ignore
+	$str =~ s/<nowiki[^<>]*>.*?<\/nowiki>//sgo; # nowiki
+	$str =~ s/<math[^<>]*>.*?<\/sath>//sgo;
+	$str =~ s/<imagemap[^<>]*>.*?<\/imagemap>//sgo;
+	$str =~ s/<gallery[^<>]*>.*?<\/gallery>//sgo;
+	$str =~ s/<ref[^<>]*\/>//sgo;
+	$str =~ s/<ref[^<>]*>.*?<\/ref>//sgo;
+	$str =~ s/<source[^<>]*>.*?<\/source>//sgo;
+	$str =~ s/<pre[^<>]*>.*?<\/pre>//sgo;
+
+	my @T;
+	foreach my $c (split (/$splitpattern/i, $str)) {
+		next if $c =~/^\s*$/o;
+		push @T, $c;
+	}
+	return @T;
 }
