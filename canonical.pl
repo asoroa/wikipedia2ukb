@@ -57,7 +57,7 @@ $dfile = $ARGV[3] if $ARGV[3];
 &usage("$dfile not found") unless &file_exists_bz2($dfile);
 
 print STDERR "Reading $pfile\n";
-my %P2Type = &get_p2type($pfile);
+my $P2Type = &get_p2type($pfile);
 
 my $pl_fh = &open_maybe_bz2($plfile);
 
@@ -73,7 +73,7 @@ while (<$pl_fh>) {
 	next if /^\s*$/;
 	my ($u, $v) = split(/\,/, $_);
 	die $. . " error\n" unless defined $u and defined $v;
-	my ($utype, $vtype) = map { $P2Type{$_} } ($u, $v);
+	my ($utype, $vtype) = map { $P2Type->{$_} } ($u, $v);
 	# type = (1=Article,2=Category,3=Redirect,4=Disambig)
 	next if $utype == 2;
 	next if $vtype == 2;
@@ -101,7 +101,7 @@ while (<$d_fh>) {
 	chomp;
 	my ($u, $v) = split(/\,/, $_);
 	die $. . " error\n" unless defined $u and defined $v;
-	my ($utype, $vtype) = map { $P2Type{$_} } ($u, $v);
+	my ($utype, $vtype) = map { $P2Type->{$_} } ($u, $v);
 	next if $vtype == 2;
 	$Tree{$u}->{childs}->{$v} = 1;
 	$Tree{$v}->{n_parents}++;
@@ -152,18 +152,18 @@ sub print_r {
 
 	  my ($fname) = @_;
 
-	  my %h;
+	  my $h = {};
 
 	  my $pages_fh = &open_maybe_bz2($fname);
 
 	  while (my $l = <$pages_fh>) {
 		  chomp($l);
 		  my ($id, $type, $title) = &parse_csv_page($l);
-		  die "$id has more than one type: $h{$id}, $type\n" if defined $h{$id};
+		  die "$id has more than one type: ".$h->{$id}.", $type\n" if defined $h->{$id};
 		  #$h{$id} = [$type, $title];
-		  $h{$id} = $type;
+		  $h->{$id} = $type;
 	  }
-	  return %h;
+	  return $h;
   }
 
 sub parse_csv_page {
