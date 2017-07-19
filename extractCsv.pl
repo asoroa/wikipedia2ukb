@@ -353,7 +353,7 @@ sub extractRedirectSummaryFromDump {
 
 		#die $page->revision->text unless defined $link_markup;
 		my $target_lang ="";
-		($link_markup, $target_lang) = &check_valid_namespace($link_markup, $target_lang);
+		($link_markup, $target_lang) = &markup_remove_target_lang($link_markup, $target_lang);
 		my ($target_namespace, $target_ns_key);
 		($link_markup, $target_namespace, $target_ns_key) = &markup_namespace($link_markup);
 
@@ -383,9 +383,6 @@ sub extractRedirectSummaryFromDump {
 	print "\n" ;
 
 	close REDIRECT ;
-
-	$PROGRESS = 2 ;
-	save_progress() ;
 }
 
 # other core tables =============================================================================================================
@@ -448,7 +445,7 @@ sub extractCoreSummariesFromDump {
 
 		foreach my $link_markup (&xtract_link_markups($stripped_text)) {
 			my $target_lang ="";
-			($link_markup, $target_lang) = &check_valid_namespace($link_markup, $target_lang);
+			($link_markup, $target_lang) = &markup_remove_target_lang($link_markup, $target_lang);
 			my ($target_namespace, $target_ns_key);
 			($link_markup, $target_namespace, $target_ns_key) = &markup_namespace($link_markup);
 			my ($target_title, $anchor_text) = &parse_link_markup($link_markup);
@@ -604,7 +601,7 @@ sub process_disamb_page {
 		next unless $pos_of_title < 0; # only interested if title of page isnt found before the link
 
 		my $target_lang ="";
-		($link_markup, $target_lang) = &check_valid_namespace($link_markup, $target_lang);
+		($link_markup, $target_lang) = &markup_remove_target_lang($link_markup, $target_lang);
 
 		last if $target_lang ne ""; # down to language links, which we want to ignore
 		my ($target_namespace, $target_ns_key);
@@ -698,7 +695,7 @@ sub extractInfoboxRelationsFromDump {
 
 		foreach my $link_markup (&xtract_infobox_markups($text)) {
 			my $target_lang ="";
-			($link_markup, $target_lang) = &check_valid_namespace($link_markup, $target_lang);
+			($link_markup, $target_lang) = &markup_remove_target_lang($link_markup, $target_lang);
 			next unless $target_lang eq ""; # no inter-lingual links
 			my ($target_namespace, $target_ns_key);
 			($link_markup, $target_namespace, $target_ns_key) = &markup_namespace($link_markup);
@@ -717,14 +714,15 @@ sub extractInfoboxRelationsFromDump {
 
 }
 
-#check that someone hasnt put a valid namespace here
-sub check_valid_namespace {
+# extract language from markup
+
+sub markup_remove_target_lang {
 
 	my ($link_markup, $target_lang) = @_;
 
 	if ($link_markup =~ m/^([a-z]{1}.+?):(.+)/) {
 		if (not defined $namespaces{lc($1)}) {
-			$target_lang = clean_text($1) ;
+			$target_lang = &clean_text($1) ;
 			$link_markup = $2 ;
 		}
 	}
@@ -809,6 +807,10 @@ sub push_link_markups {
 		$i = $j + 1;
 	}
 }
+
+#
+# Extract link markups from page content
+#
 
 sub xtract_link_markups {
 
@@ -930,7 +932,9 @@ sub title_namespace {
 	return ($title, $ns_maybe, $key);
 }
 
+#
 # Get namespace from link markup
+#
 sub markup_namespace {
 	my $link_markup = shift;
 	my $target_namespace = "" ;
@@ -1003,7 +1007,7 @@ sub strip_templates {
 	}
 	# $text =~ s/\{\{((?:[^{}]+|\{(?!\{)|\}(?!\}))*)\}\}//sxg ; #remove all templates that dont have any templates in them
 	# $text =~ s/\{\{((.|\n)*?)\}\}//g ; #repeat to get rid of nested templates
-	# $text =~ s/\{\|((.|\n)+?)\|\}//g ; #remove {|...|} structures
+	$res =~ s/\{\|((.|\n)+?)\|\}//g ; #remove {|...|} structures
 
 	return $res ;
 }
