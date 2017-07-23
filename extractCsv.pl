@@ -970,7 +970,7 @@ sub parse_link_markup {
 sub strip_templates {
 	my $text = shift ;
 
-	my $res;
+	my $res = "";
 	my @T = split(/(\{\{|\}\})/, $text);
 	my $open = 0;
 	for (my $i=0; $i < scalar(@T); $i++) {
