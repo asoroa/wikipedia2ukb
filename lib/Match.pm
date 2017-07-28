@@ -75,19 +75,19 @@ sub match_idx {
 
 	my $words = ref($ctx) ? $ctx : [split(/\s+/, $ctx)];
 
-	my @Idx;
+	my $Idx = [];
 	my $i = 0;
 	while($i < @{ $words }) {
 		my $j = $self->_match($words, $i);
 		if ($j > 0) {
 			# there is a match
-			push @Idx, [$i, $i+$j];
+			push @{ $Idx }, [$i, $i+$j];
 			$i += $j ;
 		} else {
 			$i++;
 		}
 	}
-	return @Idx;
+	return $Idx;
 }
 
 #
@@ -101,10 +101,10 @@ sub do_match {
 	croak "Match object not initialized!\n"
 	  unless $self->{trie};
 
-	my $words = ref($ctx) ? $ctx : [split(/\s+/, $ctx)];
+	my $words = [split(/\s+/, lc($ctx))];
 
 	my @A;
-	foreach my $ipair ($self->match_idx($words)) {
+	foreach my $ipair (@{ $self->match_idx($words) }) {
 		my ($left, $right) = @{ $ipair };
 		next if ($left == $right);
 		push @A, lc(join("_", @{$words}[$left..$right - 1]));
@@ -158,7 +158,7 @@ sub _match {
 
 	my $self = shift;
 	my($words, $i) = @_ ;
-	my $awkey = $self->{trie}->{ lc($words->[$i]) };
+	my $awkey = $self->{trie}->{ $words->[$i] };
 	return 0 unless defined $awkey;
 	my $awN = @{ $awkey };
 	return 1 if $awN == 1;
@@ -166,7 +166,7 @@ sub _match {
 	$maxidx =  $awN - 1  if $awN - 1 < $maxidx;
 	for(my $length = $maxidx; $length > 0; $length--) {
 		next unless defined $awkey->[$length];
-		my $context = lc(join(" ",  @{$words}[$i+1..$i+$length]));
+		my $context = join(" ",  @{$words}[$i+1..$i+$length]);
 		foreach my $entry (@{ $awkey->[$length] }) {
 			return $length + 1 if $context eq $entry->[0] ;
 		}

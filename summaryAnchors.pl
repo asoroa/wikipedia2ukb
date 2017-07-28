@@ -197,8 +197,8 @@ sub clean_text {
 	#$text =~ s/\{/\\\{/g ;		#escape curly braces
 	#$text =~ s/\}/\\\}/g ;		#escape curly braces
 
-	$text =~ s/^\s+|\s+$//g;	#remove leading & trailing spaces
-
+	$text =~ s/^\s+//g; #remove leading spaces
+	$text =~ s/\s+$//g;  #remove trailing spaces
 	return $text ;
 }
 
