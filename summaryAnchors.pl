@@ -11,7 +11,7 @@ use Getopt::Std;
 
 my %opts;
 
-getopts('hl:f', \%opts);
+getopts('thl:f', \%opts);
 
 &usage("") if $opts{'h'};
 &usage("missing parameters") unless @ARGV == 2;
@@ -24,35 +24,18 @@ my ($category_str, %namespaces) = &get_namespaces($dumpfile) ;
 
 my $dict = new Match($ARGV[1]); # see Match.pm to get internals
 my $acounts = {};
-&process_dump($dumpfile, $dict, $acounts);
-
-my $trie = $dict->{trie};
-while(my ($firstword, $h) = each %{ $trie }) {
-	my $fw = lc($firstword);
-	foreach my $narr ( @{ $h } ) {
-		next unless defined $narr;
-		foreach my $ae (@{ $narr }) {
-			my $anchor = $fw;
-			$anchor .= lc("_".$ae->[0]) if $ae->[0];
-			$anchor =~ s/\s+/_/go;
-			my $tf = $acounts->{$anchor};
-			$tf = 0 unless defined $tf;
-			#next unless defined $tf;
-			my $af = &count_entfreqs($ae->[1]);
-			print "$anchor ".join(" ", $ae->[1])."\t".$af."\t".$tf."\n";
-		}
-	}
+if ($opts{'t'}) {
+	&process_text($dumpfile, $dict, $acounts);
+} else {
+	&process_dump($dumpfile, $dict, $acounts);
 }
 
-sub count_entfreqs {
-
-	my $str = shift;
-	my $F = 0;
-	foreach my $ef (split(/\s+/, $str)) {
-		my (undef, $f) = &xtract_freq($ef);
-		$F += $f;
-	}
-	return $F;
+my $D = $dict->get_dict();
+while(my ($hw, $ef) = each %{ $D }) {
+	my $tf = $acounts->{$hw};
+	$tf = 0 unless defined $tf;
+	#next unless defined $tf;
+	print "$hw $ef\t$tf\n";
 }
 
 sub process_dump {
@@ -66,22 +49,24 @@ sub process_dump {
 		my $text = $page->revision->text ;
 		my $stripped_text = strip_templates($text) ;
 		next unless $stripped_text;
-		foreach my $anchor ($dict->do_match(&strip_link_markups($stripped_text))) {
+		my $norm_txt = &strip_link_markups($stripped_text);
+		foreach my $anchor ($dict->do_match($norm_txt)) {
 			$acounts->{$anchor}++;
 		}
 	}
 }
 
-sub match_para {
-	my $str = shift;
-	my @wordsArray = split(/\s+/, $str);
-	my @idxs = $dict->match_idx(\@wordsArray);
-	foreach my $idx (@idxs) {
-		my ($left, $right) = @{ $idx };
-		next if ($left == $right);       # malformed entity, ignore
-		print join("_", @wordsArray[$left .. $right-1])."\n";
+sub process_text {
+	my ($fname, $dict, $acounts) = @_;
+	open(my $fh, $fname) or die;
+	binmode $fh, ":utf8";
+	while (my $norm_txt = <$fh>) {
+		foreach my $anchor ($dict->do_match($norm_txt)) {
+			$acounts->{$anchor}++;
+		}
 	}
 }
+
 
 sub strip_templates {
 	my $text = shift ;
@@ -203,15 +188,6 @@ sub clean_text {
 }
 
 
-sub xtract_link_markups {
-
-	my ($text) = @_;
-
-	my @markups;
-	&push_link_markups(\@markups, $text);
-	return @markups;
-}
-
 sub open_maybe_bz2 {
 
 	my $fname = shift;
@@ -234,15 +210,6 @@ sub file_exists {
 	return 0 if $fname =~ /\.bz2$/;
 	$fname .= ".bz2";
 	return -e $fname;
-}
-
-sub xtract_freq {
-
-	my $str = shift;
-	my @aux = split(/:/, $str);
-	return ($str, 0) unless (@aux > 1 && $aux[-1] =~ /\d+/);
-	my $f = pop @aux;
-	return (join(":", @aux), $f);
 }
 
 sub title_namespace {
@@ -330,7 +297,7 @@ sub usage {
 Usage: $exec [-h] dump.xml dictionary.txt > dict_summary.csv
 
 	The ourput format is:
-headword E1:f1 E2:f2 ... TAB N_anchor TAB N_total
+headword E1:f1 E2:f2 ... TAB N_total
 USG
 	  print STDERR "\n$str\n" if $str;
 	exit 1;

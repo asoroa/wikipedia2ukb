@@ -39,6 +39,37 @@ use Carp qw(croak);
 
 my $vocab;
 
+my $max_nb = 5;
+
+sub length_add_length {
+	my ($sref, $l) = @_;
+	${ $sref } |= 1 << ($l-1);
+}
+
+sub length_begin {
+	my ($length, $m) = @_;
+	return 0 unless $m > 0;
+	$m = $max_nb if $m > $max_nb;
+	my $mask = 1 << ($m - 1);
+	while($m > 0 && !($length & $mask)) {
+		$mask = $mask >> 1;
+		$m--;
+	}
+	return $m;
+}
+
+sub length_next {
+	my ($length, $l) = @_;
+	return 0 unless $l > 0;
+	$l--;
+	my $mask = 1 << $l;
+	while($l > 0 && !($length & $mask)) {
+		$mask = $mask >> 1;
+		$l--;
+	}
+	return $l;
+}
+
 sub new {
 
 	my $that = shift;
@@ -47,7 +78,8 @@ sub new {
 	croak "Error: must pass dictionary (filename or hash)"
 	  unless @_;
 	my $self = {
-				trie => {},
+				fwords => {},
+				dict => {},
 				i => 0,
 				N => 0
 			   };
@@ -62,6 +94,11 @@ sub new {
 ##########################################
 # member functions
 
+sub get_dict {
+	my $self = shift;
+	return $self->{dict};
+}
+
 #
 # returns matches as indices over tokens
 #
@@ -71,7 +108,7 @@ sub match_idx {
 	my $ctx = shift;
 
 	croak "Match object not initialized!\n"
-	  unless $self->{trie};
+	  unless $self->{dict};
 
 	my $words = ref($ctx) ? $ctx : [split(/\s+/, $ctx)];
 
@@ -99,7 +136,7 @@ sub do_match {
 	my $ctx = shift;
 
 	croak "Match object not initialized!\n"
-	  unless $self->{trie};
+	  unless $self->{dict};
 
 	my $words = [split(/\s+/, lc($ctx))];
 
@@ -127,30 +164,6 @@ sub match_arr {
 	return $self->do_match($_[0]);
 }
 
-# build structure trie-style
-# x $vocab->{'trie'}->{'datu'}
-# 0  ARRAY(0x2464128)
-#    0  ARRAY(0x8bdafb8)
-#       0  ARRAY(0x8bdaf40)
-#          0  ''
-#          1  'Datu_(estatistika):3 Informatika:2 Zientzia:2 Estatistika:2'
-#    1  ARRAY(0x2464158)
-#       0  ARRAY(0x243b560)
-#          0  'kazetaritza'
-#          1  'Datu_kazetaritza:1'
-#       1  ARRAY(0x2adeb88)
-#          0  'masibo'
-#          1  'Datu_handiak:1'
-#       ....
-#       25  ARRAY(0xd820b00)
-#          0  'basetan'
-#          1  'Datu-base:1'
-#    2  ARRAY(0xcb76050)
-#       0  ARRAY(0xcb760c8)
-#          0  'mota osoa'
-#          1  'Datu_mota_osoa:1'
-
-#
 # do the proper match
 # returns the number of words matched, starting at position $i
 
@@ -158,18 +171,17 @@ sub _match {
 
 	my $self = shift;
 	my($words, $i) = @_ ;
-	my $awkey = $self->{trie}->{ $words->[$i] };
-	return 0 unless defined $awkey;
-	my $awN = @{ $awkey };
-	return 1 if $awN == 1;
-	my $maxidx = scalar @{$ words } - $i - 1;
-	$maxidx =  $awN - 1  if $awN - 1 < $maxidx;
-	for(my $length = $maxidx; $length > 0; $length--) {
-		next unless defined $awkey->[$length];
-		my $context = join(" ",  @{$words}[$i+1..$i+$length]);
-		foreach my $entry (@{ $awkey->[$length] }) {
-			return $length + 1 if $context eq $entry->[0] ;
-		}
+
+	my $lengths = $self->{fwords}->{ $words->[$i] };
+	return 0 unless defined $lengths;
+	my $l = &length_begin($lengths, scalar @{ $words } - $i);
+	if ($l == 1) {
+		return 1 if defined $self->{dict}->{ $words->[$i] };
+		return 0;
+	}
+	for(; $l > 0; $l = &length_next($lengths, $l)) {
+		my $ctx = join("_", @{ $words }[$i .. $i + $l - 1]);
+		return $l if defined $self->{dict}->{ $ctx };
 	}
 	return 0;
 }
@@ -187,11 +199,12 @@ sub _initFromFile {
 	while (my $str = <$fh>) {
 		my ($entry, @C) = split(/\s+/, $str);
 		my $ef = join(" ", @C);
-		my ($firstword, @rwords) = split(/_+/,$entry) ;
-		my $length = @rwords ;
-		next unless $firstword;
-		push @{ $self->{trie}->{$firstword}->[$length] },
-		  [join(" ", @rwords), $ef];
+		my ($fword, @rwords) = split(/_+/,$entry) ;
+		next if @rwords > $max_nb - 1;
+		my $fw_lengths = \$self->{fwords}->{$fword};
+		${ $fw_lengths } = 0 unless defined ${ $fw_lengths };
+		&length_add_length($fw_lengths, scalar(@rwords) + 1);
+		$self->{dict}->{$entry} = $ef;
 		$self->{N}++;
 	}
 }
