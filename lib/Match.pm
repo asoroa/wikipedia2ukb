@@ -39,7 +39,10 @@ use Carp qw(croak);
 
 my $vocab;
 
-my $max_nb = 5;
+my $max_max_nb = 31; # number of bits
+my $default_max_nb = 5;
+my $default_min_nb = 5;
+my $default_min_freq = 10;
 
 sub length_add_length {
 	my ($sref, $l) = @_;
@@ -49,7 +52,6 @@ sub length_add_length {
 sub length_begin {
 	my ($length, $m) = @_;
 	return 0 unless $m > 0;
-	$m = $max_nb if $m > $max_nb;
 	my $mask = 1 << ($m - 1);
 	while($m > 0 && !($length & $mask)) {
 		$mask = $mask >> 1;
@@ -80,12 +82,22 @@ sub new {
 	my $self = {
 				fwords => {},
 				dict => {},
+				i => 0,
+				max_nb => $default_max_nb,
+				min_nb => $default_min_nb,
+				min_freq => $default_min_freq,
 				N => 0
 			   };
 	bless $self, $class;
-	croak "Error: ".$_[0]." not found"
-	  unless -f $_[0];
-	$self->_initFromFile($_[0]);
+	$self->{min_freq} = $_[1] if defined $_[1] and $_[1] > 0;
+	$self->{min_nb} = $_[2] if defined $_[2] and $_[2] > 0;
+	if (ref($_[0]) eq "HASH") {
+		$self->initFromHash($_[0]);
+	} else {
+		croak "Error: ".$_[0]." not found"
+		  unless -f $_[0];
+		$self->_initFromFile($_[0]);
+	}
 	return $self;
 }
 
@@ -95,6 +107,17 @@ sub dump_info {
 	print $fh "Number of fwords: ". scalar (keys %{ $self->{fwords} }) ."\n";
 	print $fh "Number of head words: ". scalar (keys %{ $self->{dict} }) ."\n";
 	print $fh "Max nb: $max_nb\n";
+
+	my @A = (0) x $self->{max_nb};
+	while (my ($fw, $lengths) = each %{ $self->{fwords} }) {
+		my $l = &length_begin($lengths, $self->{max_nb});
+		for(; $l > 0; $l = &length_next($lengths, $l)) {
+			$A[$l - 1]++;
+		}
+	}
+	print $fh "(".join(",", @A).")\n";
+
+
 }
 
 ##########################################
@@ -120,8 +143,9 @@ sub match_idx {
 
 	my $Idx = [];
 	my $i = 0;
+	my $m = @{ $words } ;
 	while($i < @{ $words }) {
-		my $j = $self->_match($words, $i);
+		my $j = $self->_match($words, $i, $m);
 		if ($j > 0) {
 			# there is a match
 			push @{ $Idx }, [$i, $i+$j];
@@ -176,11 +200,13 @@ sub match_arr {
 sub _match {
 
 	my $self = shift;
-	my($words, $i) = @_ ;
+	my($words, $i, $M) = @_ ;
 
 	my $lengths = $self->{fwords}->{ $words->[$i] };
 	return 0 unless defined $lengths;
-	my $l = &length_begin($lengths, scalar @{ $words } - $i);
+	my $m = $M - $i;
+	$m = $self->{max_nb} if $m > $self->{max_nb};
+	my $l = &length_begin($lengths, $m);
 	if ($l == 1) {
 		return 1 if defined $self->{dict}->{ $words->[$i] };
 		return 0;
@@ -206,13 +232,51 @@ sub _initFromFile {
 		my ($entry, @C) = split(/\s+/, $str);
 		my $ef = join(" ", @C);
 		my ($fword, @rwords) = split(/_+/,$entry) ;
-		next if @rwords > $max_nb - 1;
+		my $nb = scalar(@rwords) + 1;
+		next if $nb > $max_max_nb;
+		next if $nb > $self->{min_nb} and not &sum_above(\@C, $self->{min_freq});
 		my $fw_lengths = \$self->{fwords}->{$fword};
 		${ $fw_lengths } = 0 unless defined ${ $fw_lengths };
-		&length_add_length($fw_lengths, scalar(@rwords) + 1);
-		$self->{dict}->{$entry} = $ef;
+		&length_add_length($fw_lengths, $nb);
+		$self->{dict}->{$entry} = 1;
+		$self->{max_nb} = $nb if $nb > $self->{max_nb};
 		$self->{N}++;
 	}
 }
+
+sub _initFromHash {
+
+	my ($self, $h) = @_;
+
+	while (my ($entry, undef) = each %{ $h } ) {
+		my ($fword, @rwords) = split(/_+/,$entry) ;
+		my $nb = scalar(@rwords) + 1;
+		my $fw_lengths = \$self->{fwords}->{$fword};
+		${ $fw_lengths } = 0 unless defined ${ $fw_lengths };
+		&length_add_length($fw_lengths, $nb);
+		$self->{dict}->{$entry} = 1;
+		$self->{max_nb} = $nb if $nb > $self->{max_nb};
+		$self->{N}++;
+	}
+}
+
+sub sum_above {
+
+	my ($EF, $m) = @_;
+
+	my $w = 0;
+	foreach my $ef (@{ $EF }) {
+		my @aux = split(/:/, $ef);
+		my $f = 0;
+		if (@aux > 1 && $aux[-1] =~ /\d+/) {
+			$f += pop @aux;
+		}
+		$f = 1 unless $f;
+		$w += $f;
+		return 1 if $w > $m;
+	}
+	return 0;
+}
+
 
 (1) ;

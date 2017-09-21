@@ -1,3 +1,5 @@
+#!/usr/bin/perl
+
 binmode STDOUT, ":utf8";
 
 use strict ;
@@ -11,18 +13,21 @@ use Getopt::Std;
 
 my %opts;
 
-getopts('thl:f', \%opts);
+getopts('f:th', \%opts);
 
 &usage("") if $opts{'h'};
 &usage("missing parameters") unless @ARGV == 2;
 &usage("Dump file \'$ARGV[0]\' not found") unless &file_exists($ARGV[0]);
 &usage("Dictionary \'$ARGV[1]\' not found") unless &file_exists($ARGV[1]);
 
+my $min_freq = 10;
+$min_freq = $opts{'f'} if defined $opts{'f'} && $opts{'f'} > 0;
+
 my $dumpfile = $ARGV[0];
 
 my ($category_str, %namespaces) = &get_namespaces($dumpfile) ;
 
-my $dict = new Match($ARGV[1]); # see Match.pm to get internals
+my $dict = new Match($ARGV[1], $min_freq); # see Match.pm to get internals
 my $acounts = {};
 if ($opts{'t'}) {
 	&process_text($dumpfile, $dict, $acounts);
@@ -296,9 +301,14 @@ sub usage {
 	print STDERR <<"USG";
 Usage: $exec [-h] dump.xml dictionary.txt > dict_summary.csv
 
+	-f	minimum freq. for mentions (default is 10)
+	-t	process text file (instead of XML dump)
+
+
 	The ourput format is:
+
 headword E1:f1 E2:f2 ... TAB N_total
 USG
-	  print STDERR "\n$str\n" if $str;
+	  print STDERR "\n[E] $str\n" if $str;
 	exit 1;
 }
