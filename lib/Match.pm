@@ -60,9 +60,9 @@ sub length_begin {
 
 sub length_next {
 	my ($length, $l) = @_;
-	return 0 unless $l > 0;
+	return 0 unless $l > 1;
 	$l--;
-	my $mask = 1 << $l;
+	my $mask = 1 << ($l - 1);
 	while($l > 0 && !($length & $mask)) {
 		$mask = $mask >> 1;
 		$l--;
