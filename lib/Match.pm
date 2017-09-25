@@ -80,7 +80,6 @@ sub new {
 	my $self = {
 				fwords => {},
 				dict => {},
-				i => 0,
 				N => 0
 			   };
 	bless $self, $class;
@@ -90,6 +89,13 @@ sub new {
 	return $self;
 }
 
+
+sub dump_info {
+	my ($self, $fh) = @_;
+	print $fh "Number of fwords: ". scalar (keys %{ $self->{fwords} }) ."\n";
+	print $fh "Number of head words: ". scalar (keys %{ $self->{dict} }) ."\n";
+	print $fh "Max nb: $max_nb\n";
+}
 
 ##########################################
 # member functions
