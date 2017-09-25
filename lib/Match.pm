@@ -106,7 +106,8 @@ sub dump_info {
 	my ($self, $fh) = @_;
 	print $fh "Number of fwords: ". scalar (keys %{ $self->{fwords} }) ."\n";
 	print $fh "Number of head words: ". scalar (keys %{ $self->{dict} }) ."\n";
-	print $fh "Max nb: $max_nb\n";
+	print $fh "Max nb: ". $self->{max_nb}. "\n";
+	print $fh "Min freq: ". $self->{min_freq}. "\n";
 
 	my @A = (0) x $self->{max_nb};
 	while (my ($fw, $lengths) = each %{ $self->{fwords} }) {
@@ -116,8 +117,6 @@ sub dump_info {
 		}
 	}
 	print $fh "(".join(",", @A).")\n";
-
-
 }
 
 ##########################################
