@@ -103,6 +103,7 @@ $PROGRESS = 0 if defined $opts{'f'};
 my @ids = (); # ordered array of page ids
 my %pages_ns0 = (); # case normalized title -> id. 'Page, Redirect, Disambiguation' articles.
 my %pages_ns14 = (); # case normalized title -> id. 'Category' articles.
+my %id_is_disamb = (); # whether id is disamb page
 
 if ($PROGRESS > 3 ) {
 	print "Nothing to do. Check your progress file: $PROGRESSFILE\n";
@@ -172,6 +173,7 @@ sub readPageSummaryFromCsv {
 			} else {
 				$pages_ns0{$page_title} = $page_id ;
 			}
+			$id_is_disamb{$page_id} = 1 if $page_type == 4;
 		}
 
 		print_progress("reading page summary from csv file", $start_time, $parts_done, $parts_total) ;
@@ -258,6 +260,7 @@ sub extractPageSummaryFromDump {
 					$pages_ns14{$normalized_title} = $id ;
 				}
 			}
+			$id_is_disamb{$id} = 1 if $type == 4;
 			print PAGE "$id,\"$title\",$type\n" ;
 		}
 	}
@@ -386,7 +389,7 @@ sub extractCoreSummariesFromDump {
 	my $start_time = time ;
 	my $parts_total = -s $DUMP_FILE ;
 
-	open (PAGELINK, "> $out_dir/pagelink.csv") ;
+	open (my $pagelink_fh, "> $out_dir/pagelink.csv") ;
 	open (CATLINK, "> $out_dir/categorylink.csv") ;
 	open (TRANSLATION, "> $out_dir/translation.csv") ;
 	binmode(TRANSLATION, ':utf8') ;
@@ -425,8 +428,10 @@ sub extractCoreSummariesFromDump {
 
 		my $stripped_text = strip_templates($text) ;
 		next unless $stripped_text;
-
-		&process_disamb_page($stripped_text, $id, $title, $disambig_fh) if &page_is_disamb($text);
+		if ($id_is_disamb{$id}) {
+			&process_disamb_page($stripped_text, $id, $title, $disambig_fh, $pagelink_fh);
+			next;
+		}
 
 		foreach my $link_markup (&xtract_link_markups($stripped_text)) {
 			my $target_lang;
@@ -445,7 +450,7 @@ sub extractCoreSummariesFromDump {
 					my $target_id = resolve_link($target_title, $target_ns_key) ;
 
 					if (defined $target_id) {
-						print PAGELINK "$id,$target_id\n" ;
+						print $pagelink_fh "$id,$target_id\n" ;
 
 						my $freq = $anchors{"\"$anchor_text\":$target_id"} ;
 
@@ -478,7 +483,7 @@ sub extractCoreSummariesFromDump {
 	print_progress("extracting core summaries from dump file", $start_time, $parts_total, $parts_total) ;
 	print "\n" ;
 
-	close PAGELINK ;
+	close $pagelink_fh ;
 	close CATLINK ;
 	close TRANSLATION ;
 	close $disambig_fh ;
@@ -566,7 +571,7 @@ sub extractCoreSummariesFromDump {
 
 sub process_disamb_page {
 
-	my ($stripped_text, $id, $title, $disamb_fh) = @_;
+	my ($stripped_text, $id, $title, $disamb_fh, $pagelink_fh) = @_;
 
 	my $index = 0 ;
 
@@ -602,6 +607,9 @@ sub process_disamb_page {
 
 		if (defined $target_id) {
 			$index ++ ;
+
+			# write pagelink
+			print $pagelink_fh "$id,$target_id\n" ;
 
 			my $scope = $line ;
 			$scope =~ s/^(\**)//g ; #clean list markers
