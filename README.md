@@ -241,6 +241,9 @@ The `wikipedia2ukb` is derived from Wikipedia Miner Toolkit, version 1.0,
 which is copyrighted in 2008 by David Milne, University Of Waikato, and
 distributed under the terms of the GNU General Public License.
 
+Some parts of the code are borrowed from the `wikistatsextractor` tool,
+which is distributed under the MIT license.
+
 The Tree::XPathEngine module is copyrighted in 2006 by Michel Rodriguez, and
 distributed under the same terms as Perl itself.
 

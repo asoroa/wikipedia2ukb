@@ -205,7 +205,7 @@ sub extractPageSummaryFromDump {
 
 		my $id = int($page->id) ;
 		my ($title, $namespace, $namespace_key) = &title_namespace($page->title) ;
-		my $text = $page->revision->text ;
+		my $text = $page->revision->text ; # use raw text (with templates) to know whether page is disamb
 
 		#identify the type of the page (1=Article,2=Category,3=Redirect,4=Disambig)
 		my $type ;
@@ -409,7 +409,8 @@ sub extractCoreSummariesFromDump {
 
 		my $id = int($page->id) ;
 		my ($title, $namespace, $namespace_key) = &title_namespace($page->title) ;
-		my $text = $page->revision->text ;
+		next unless ($namespace_key==0 or $namespace_key==14);
+		my $stripped_text = &get_page_text($page->revision->text) ;
 
 		if ($namespace_key==14) {
 			#find this category's equivalent article
@@ -421,9 +422,7 @@ sub extractCoreSummariesFromDump {
 			}
 		}
 
-		next unless ($namespace_key==0 or $namespace_key==14);
-
-		my $stripped_text = strip_templates($text) ;
+		#my $stripped_text = strip_templates($text) ;
 		next unless $stripped_text;
 		if ($id_is_disamb{$id}) {
 			&process_disamb_page($stripped_text, $id, $title, $disambig_fh, $pagelink_fh);
@@ -681,11 +680,9 @@ sub extractInfoboxRelationsFromDump {
 
 		my $id = int($page->id) ;
 		my ($title, $namespace, $namespace_key) = &title_namespace($page->title) ;
-		my $text = $page->revision->text ;
-
 		next unless ($namespace_key==0 or $namespace_key==14);
-
-		foreach my $link_markup (&xtract_infobox_markups($text)) {
+		my $stripped_text = &get_page_text($page->revision->text) ;
+		foreach my $link_markup (&xtract_infobox_markups($stripped_text)) {
 			my $target_lang;
 			($link_markup, $target_lang) = &markup_remove_target_lang($link_markup);
 			next unless $target_lang eq ""; # no inter-lingual links
@@ -743,17 +740,17 @@ sub xtract_infobox_markups {
 
 	my %markups;
 
-	$str =~ s/<!--.*?-->//gs; # remove XML comments
-	$str =~ s/<noinclude[^<>]*>.*?<\/noinclude>//sgo; # noinclude, comments: usually ignore
-	$str =~ s/<\/?includeonly>//sgo; # noinclude, comments: usually ignore
-	$str =~ s/<nowiki[^<>]*>.*?<\/nowiki>//sgo; # nowiki
-	$str =~ s/<math[^<>]*>.*?<\/sath>//sgo;
-	$str =~ s/<imagemap[^<>]*>.*?<\/imagemap>//sgo;
-	$str =~ s/<gallery[^<>]*>.*?<\/gallery>//sgo;
-	$str =~ s/<ref[^<>]*\/>//sgo;
-	$str =~ s/<ref[^<>]*>.*?<\/ref>//sgo;
-	$str =~ s/<source[^<>]*>.*?<\/source>//sgo;
-	$str =~ s/<pre[^<>]*>.*?<\/pre>//sgo;
+	# $str =~ s/<!--.*?-->//gs; # remove XML comments
+	# $str =~ s/<noinclude[^<>]*>.*?<\/noinclude>//sgo; # noinclude, comments: usually ignore
+	# $str =~ s/<\/?includeonly>//sgo; # noinclude, comments: usually ignore
+	# $str =~ s/<nowiki[^<>]*>.*?<\/nowiki>//sgo; # nowiki
+	# $str =~ s/<math[^<>]*>.*?<\/sath>//sgo;
+	# $str =~ s/<imagemap[^<>]*>.*?<\/imagemap>//sgo;
+	# $str =~ s/<gallery[^<>]*>.*?<\/gallery>//sgo;
+	# $str =~ s/<ref[^<>]*\/>//sgo;
+	# $str =~ s/<ref[^<>]*>.*?<\/ref>//sgo;
+	# $str =~ s/<source[^<>]*>.*?<\/source>//sgo;
+	# $str =~ s/<pre[^<>]*>.*?<\/pre>//sgo;
 
 	my @T = split(/(\{\{|\}\})/, $str);
 
@@ -1050,6 +1047,199 @@ sub clean_text {
 	$text =~ s/\s+$//g;  #remove trailing spaces
 
 	return $text ;
+}
+
+# get a clean text from page
+#
+# - remove comments
+# - strip templates
+# - optionally, remove lists
+#
+# This code is borrowed from wikistatextractor at
+#
+#  https://github.com/diffbot/wikistatsextractor
+#
+
+sub get_page_text {
+	my ($page, $ignore_lists, $ignore_ref) = @_;
+
+	$ignore_ref = 1 unless defined $ignore_ref and $ignore_ref == 0;
+	$ignore_lists = 1 unless defined $ignore_lists and $ignore_lists == 0;
+
+	my $sb = "";
+	my $output = [];
+	my $nb_accolades = 0;
+	my $nb_semi_accolades = 0;	# detects the "{|"
+	my $is_in_ref = 0;
+	my $is_in_markup = 0;
+	my $is_in_comment = 0;
+	my $is_in_div = 0;
+	my $div_level = 0;
+	my $is_in_list = 0;
+	my $nb_brackets = 0;
+	my $start_bracket = 0;
+	my $total_length = 0;
+	$page .= " ";
+	my $end_text = length($page);
+
+	return undef unless $end_text > 0;
+	for (my $i = -1; $i < $end_text - 1; $i++) {
+		my $c = substr($page, $i, 1);
+		my $c_1 = substr($page, $i + 1, 1);
+		# for good measure, the text will virtually starts with a "\n" (the
+		# list pattern includes "\n")
+		if ($i == -1) {
+			$c = "\n";
+		}
+
+		# first we remove everything between {{ }} */
+		if ($c eq "{" && $c_1 eq "{") {
+			$nb_accolades++;
+			$i++;
+			next;
+		}
+		if ($c eq "}" && $c_1 eq "}") {
+			$nb_accolades--;
+			$i++;
+			next;
+		}
+		next if $nb_accolades;
+
+		# Then we remove everything between {| |} */
+		if ($c eq "{" && $c_1 eq "|") {
+			$nb_semi_accolades++;
+			$i++;
+			next;
+		}
+		if ($c eq "|" && $c_1 eq "}") {
+			$nb_semi_accolades--;
+			$i++;
+			next;
+		}
+		next if $nb_semi_accolades;
+
+		# if we specify it, we can ignore everything that is in a list
+		# (start with \n* or \n# or \n:).
+
+		if ($ignore_lists && $c eq "\n" && ($c_1 eq "*" || $c_1 eq "#" || $c_1 eq ":")) {
+			$is_in_list = 1;
+			next;
+		}
+		$is_in_list = 0 if $is_in_list && $c eq "\n";
+		next if $is_in_list;
+
+		# if it is a new paragraph, so either \n\n or =\n or \n=, we put
+		# the content of the StringBuilder in a new String
+
+		if ($c eq "\n" && ($c_1 eq "\n" || $c_1 eq "=" || substr($page, $i - 1, 1) eq "=")) {
+			if (length($sb) > 1) {
+				$sb =~ s/^\s+//o;
+				$sb =~ s/\s+$//o;
+				push @{ $output }, $sb if length($sb) > 1;
+				$total_length += length($sb);
+			}
+			# reset the stringbuilder */
+			$sb = "";
+		}
+
+		# deal with the comments (<!-- -->;) */
+		if ($c eq "<" && $c_1 eq "!" && $end_text > $i + 4 && substr($page, $i, 4) eq "<!--") {
+			$is_in_comment = 1;
+			$i += 3;
+			next;
+		}
+		if ($c eq "-" && $c_1 eq "-" && $end_text > $i + 2 && substr($page, $i, 2) eq "-->") {
+			$is_in_comment = 0;
+			$i += 1;
+			next;
+		}
+		next if $is_in_comment;
+
+		# Sometimes there are some html div (yeah...)  in the dump, we try to remove then. */
+		if ($c eq "<" && $c_1 eq "d" && $end_text > $i + 4 && substr($page, $i, 4) eq "<div") {
+			$is_in_div = 1;
+			$div_level++;
+			$i += 3;
+			next;
+		}
+		if ($c eq "<" && $c_1 eq "/" && $end_text > $i + 6 && substr($page, $i, 6) eq "</div>") {
+			$div_level--;
+			$div_level = 0 if $div_level < 0;
+			$is_in_div = 0 unless $div_level;
+			$i += 5;
+			next;
+		}
+		next if $is_in_div;
+		# remove the ''' ''' (bold) and === === (title) */
+		if ($c eq "\'" && $c_1 eq "\'") {
+			while ($i < $end_text && substr($page, $i, 1) eq "\'") {
+				$i++;
+			}
+			$i--;
+			next;
+		}
+		if ($c eq "=" && $c_1 eq "=") {
+			while ($i < $end_text && substr($page, $i, 1) eq "=") {
+				$i++;
+			}
+			$i--;
+			next;
+		}
+
+		# TODO: deal with links and maintain just the mention, only if called with special switch
+
+		if ($ignore_ref) {
+			# deal with the references (<ref>) */
+			if ($c eq "<" && $c_1 eq "r" && $end_text > $i + 4 && substr($page, $i, 4) eq "<ref") {
+				$is_in_ref = 1;
+				$i += 3;
+				# particular case of the <ref name="thing"/> */
+				my $j = $i;
+				while ($j < $end_text - 2 && substr($page, $j, 1) ne ">") {
+					$j++;
+				}
+				if (substr($page, $j - 1, 1) eq "/") {
+					$is_in_ref = 0;
+					$i = $j + 1;
+				}
+				next;
+			}
+
+			if ($c eq "<" && $c_1 eq "/" && $end_text > $i + 6 && substr($page, $i, 6) eq "</ref>") {
+				$is_in_ref = 0;
+				$i += 5;
+				next;
+			}
+			next if $is_in_ref;
+		}
+
+		# remove other kinds of markup. A markup starts with "<", and
+		# there is a ">" less than 120 characters away
+		if ($c eq "<") {
+			$is_in_markup = 0;
+			# // look if there is a &gt; less than 100 characters away. If
+			# // not, we don't remove it.
+			my $next_gt = index($page, ">", $i);
+			if ($next_gt != -1 && $next_gt - $i < 120) {
+				$is_in_markup = 1;
+				next;
+			}
+		}
+		$is_in_markup = 0 if $is_in_markup and $c eq ">";
+		$sb .= $c if !$is_in_markup;
+	}
+	$total_length += length($sb);
+
+	# if ($filter_by_size) {
+	#	return undef if ($total_length < 100);
+	# }
+
+	$sb =~ s/^\s+//o;
+	$sb =~ s/\s+$//o;
+	if (length($sb) > 1) {
+		push @{ $output }, $sb;
+	}
+	return join("\n", @{ $output} );
 }
 
 # ============================ misc=================================================================================
