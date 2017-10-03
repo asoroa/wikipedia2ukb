@@ -39,6 +39,7 @@ if (-f $out_dir) {
 	&usage("Parameter must be a XML file or a directory");
 }
 
+my $WORD_ENDING_LINKS = 0; # See https://www.mediawiki.org/wiki/Help:Links
 my $noProgress = 1;
 
 $noProgress = 0 if $opts{'p'};
@@ -596,6 +597,8 @@ sub process_disamb_page {
 		next unless $target_ns_key == 0 or $target_ns_key == 14;
 
 		my ($target_title, $anchor_text) = &parse_link_markup($link_markup);
+		next unless $anchor_text;
+		next unless $target_title;
 
 		#print "$target_lang, ns=$target_namespace($target_ns_key), n=$target_title, a=$anchor_text\n" ;
 
@@ -691,6 +694,8 @@ sub extractInfoboxRelationsFromDump {
 			next unless $target_ns_key == 0 or $target_ns_key == 14;
 
 			my ($target_title, $anchor_text) = &parse_link_markup($link_markup);
+			next unless $anchor_text;
+			next unless $target_title;
 			my $target_id = resolve_link($target_title, $target_ns_key) ;
 			if (defined $target_id) {
 				print INFOBOX "$id,$target_id\n" ;
@@ -907,40 +912,34 @@ sub push_link_markups {
 
 	my @T = split(/(\[\[|\]\])/, $text);
 
-	my ($i, $j, $m) = (0,0, scalar(@T));
+	my ($j, $m) = (0, scalar(@T));
+	my $open = 0;
+	my $nested = 0;
 
-	# find first "[[" element (i)
-	# find "]]" element and notice if nested anchors (j, nested)
-	# if nested, do nothing
-	# else
-	#   push link_markup
-	while ($i < $m) {
-		while ($i < $m and $T[$i] ne "[[") {
-			$i++;
+	for(my $i = 0; $i < $m; $i++) {
+		if ($T[$i] eq "[[") {
+			$open++;
+			$nested = 1 if $open > 1;
 		}
-		last unless ($i < $m) ;
-		# $T[$i] == "[["
-		my $markup;
-		my $nested = 0;
-		$j = $i;
-		while (++$j < $m) {
-			last if ($T[$j] eq "]]");
-			if ($T[$j] eq "[[") {
-				$nested = 1;
-				my $l = 1;
-				while (++$j < $m) {
-					last if $T[$j] eq "]]" and not $l;
-					$l-- if ($T[$j] eq "]]");
-					$l++ if ($T[$j] eq "[[");
+		if ($T[$i] eq "]]") {
+			$open--;
+			if (!$open) {
+				if ($nested) {
+					$nested = 0;
+					next;
 				}
-				last;
+				# $i-1 points to markup
+				my $markup = $T[$i - 1];
+				if ($WORD_ENDING_LINKS and $markup !~ /\|/ and $i + 1 < $m and $T[$i+1] =~ /^(\w+)/) {
+					# [[2007]]an -> 2007an
+					$markup .= $1;
+				}
+				push @{ $markups }, $markup ;
 			}
-			$markup .= $T[$j];
 		}
-		push @{ $markups }, $markup if $markup and not $nested ;
-		$i = $j + 1;
 	}
 }
+
 
 # Extract link markups from page content
 sub xtract_link_markups {
@@ -958,6 +957,12 @@ sub parse_link_markup {
 
 	my $target_title = "";
 	my $anchor_text = "" ;
+	return (undef, undef) if $link_markup =~ /:/;   # has a ':'
+	return (undef, undef) if $link_markup =~ /^\#/; # starts with '#'
+	# trim
+	$link_markup =~ s/^\s+//;
+	$link_markup =~ s/\s+$//;
+	return (undef, undef) if $link_markup =~ /\|$/; # ends with '|'
 	if ($link_markup =~ m/^(.+?)\|(.+)/) {
 		$target_title = clean_title($1) ;
 		$anchor_text = clean_text($2) ;
@@ -965,6 +970,8 @@ sub parse_link_markup {
 		$target_title = clean_title($link_markup) ;
 		$anchor_text = clean_text($link_markup) ;
 	}
+	return (undef, undef) if $target_title =~ /^[\&\"\(\']/; # title can't start with these chars
+	return (undef, undef) if $anchor_text =~ /^[\&\"\(\'-]/; # anchor can't start with these chars
 	return ($target_title, $anchor_text);
 }
 
@@ -974,24 +981,39 @@ sub parse_link_markup {
 sub strip_templates {
 	my $text = shift ;
 
+	my $open1 = 0;
+	my $open2 = 0;
+	my $m = length($text);
+	return $text if $m < 2;
 	my $res = "";
-	my @T = split(/(\{\{|\}\})/, $text);
-	my $open = 0;
-	for (my $i=0; $i < scalar(@T); $i++) {
-		if ($T[$i] eq "{{") {
-			$open++;
+	for(my $i = 0; $i < $m; $i++) {
+		my $c = substr($text, $i, 1);
+		my $c_1 = substr($text, $i+1, 1);
+		# remove everything between {{ }} */
+		if ($c eq '{' && $c_1 eq '{') {
+			$open1++;
 			next;
 		}
-		if ($T[$i] eq "}}") {
-			$open--;
+		if ($c eq '}' && $c_1 eq '}') {
+			$open1--;
 			next;
 		}
-		$res .= $T[$i] unless $open;
-	}
-	# $text =~ s/\{\{((?:[^{}]+|\{(?!\{)|\}(?!\}))*)\}\}//sxg ; #remove all templates that dont have any templates in them
-	# $text =~ s/\{\{((.|\n)*?)\}\}//g ; #repeat to get rid of nested templates
-	$res =~ s/\{\|((.|\n)+?)\|\}//g ; #remove {|...|} structures
+		$open1 = 0 if $open1 < 0;
+		next if $open1;
 
+		# remove everything between {| |} */
+		if ($c eq '{' && $c_1 eq '|') {
+			$open2++;
+			next;
+		}
+		if ($c eq '|' && $c_1 eq '}') {
+			$open2--;
+			next;
+		}
+		$open2 = 0 if $open2 < 0;
+		next if $open2;
+		$res .= $c;
+	}
 	return $res ;
 }
 
