@@ -13,7 +13,7 @@ use Getopt::Std;
 
 my %opts;
 
-getopts('f:th', \%opts);
+getopts('f:ths', \%opts);
 
 &usage("") if $opts{'h'};
 &usage("missing parameters") unless @ARGV == 2;
@@ -22,16 +22,20 @@ getopts('f:th', \%opts);
 
 my $min_freq = 10;
 $min_freq = $opts{'f'} if defined $opts{'f'} && $opts{'f'} > 0;
+my $silent = defined $opts{'s'};
 
 my $dumpfile = $ARGV[0];
 
 my ($category_str, %namespaces) = &get_namespaces($dumpfile) ;
 
+warn("Reading dict\n") unless $silent;
 my $dict = new Match($ARGV[1], $min_freq); # see Match.pm to get internals
 my $acounts = {};
 if ($opts{'t'}) {
+	warn("Processing text: $dumpfile\n") unless $silent;
 	&process_text($dumpfile, $dict, $acounts);
 } else {
+	warn("Processing XML dump: $dumpfile\n") unless $silent;
 	&process_dump($dumpfile, $dict, $acounts);
 }
 
@@ -303,7 +307,7 @@ Usage: $exec [-h] dump.xml dictionary.txt > dict_summary.csv
 
 	-f	minimum freq. for mentions (default is 10)
 	-t	process text file (instead of XML dump)
-
+	-s	be silent
 
 	The ourput format is:
 
