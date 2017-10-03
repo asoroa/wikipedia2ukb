@@ -180,7 +180,6 @@ sub readPageSummaryFromCsv {
 	}
 
 	print_progress("reading page summary from csv file", $start_time, $parts_total, $parts_total) ;
-	print("\n") ;
 }
 
 sub extractPageSummaryFromDump {
@@ -271,7 +270,6 @@ sub extractPageSummaryFromDump {
 	close PAGE ;
 
 	print_progress("extracting page summary from dump file", $start_time, $parts_total, $parts_total) ;
-	print "\n" ;
 }
 
 # =================================== redirect summary ==================================================================
@@ -314,7 +312,6 @@ sub readRedirectSummaryFromCsv {
 	}
 
 	print_progress("reading redirect summary from csv file", $start_time, $parts_total, $parts_total) ;
-	print("\n") ;
 }
 
 sub extractRedirectSummaryFromDump {
@@ -368,7 +365,6 @@ sub extractRedirectSummaryFromDump {
 	}
 
 	print_progress("extracting redirect summary from dump file", $start_time, $parts_total, $parts_total) ;
-	print "\n" ;
 
 	close REDIRECT ;
 }

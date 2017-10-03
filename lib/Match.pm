@@ -237,7 +237,7 @@ sub _initFromFile {
 		my $fw_lengths = \$self->{fwords}->{$fword};
 		${ $fw_lengths } = 0 unless defined ${ $fw_lengths };
 		&length_add_length($fw_lengths, $nb);
-		$self->{dict}->{$entry} = 1;
+		$self->{dict}->{$entry} = $ef;
 		$self->{max_nb} = $nb if $nb > $self->{max_nb};
 		$self->{N}++;
 	}
@@ -247,13 +247,13 @@ sub _initFromHash {
 
 	my ($self, $h) = @_;
 
-	while (my ($entry, undef) = each %{ $h } ) {
+	while (my ($entry, $ef) = each %{ $h } ) {
 		my ($fword, @rwords) = split(/_+/,$entry) ;
 		my $nb = scalar(@rwords) + 1;
 		my $fw_lengths = \$self->{fwords}->{$fword};
 		${ $fw_lengths } = 0 unless defined ${ $fw_lengths };
 		&length_add_length($fw_lengths, $nb);
-		$self->{dict}->{$entry} = 1;
+		$self->{dict}->{$entry} = $ef;
 		$self->{max_nb} = $nb if $nb > $self->{max_nb};
 		$self->{N}++;
 	}
