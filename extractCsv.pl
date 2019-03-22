@@ -77,6 +77,14 @@ $language{"eu"}->{disambig_categories} = ["wikipedia:argipen"] ; # ??
 $language{"en"}->{see_also} = "ikus, gainera";
 $language{"eu"}->{root_category} = "Edukiak" ;
 
+# chinese
+
+$language{"zh"}->{redir_string} = ["重定向"];
+$language{"zh"}->{disambig_templates} = ["disambiguation", "disambig","消歧义"] ;
+$language{"zh"}->{disambig_categories} = ["消歧义"] ; # ??
+$language{"zh"}->{see_also} = "see also";
+$language{"zh"}->{root_category} = "总览" ; # ??
+
 # language setting =========================================================================================================
 
 my $xlang = "en";
